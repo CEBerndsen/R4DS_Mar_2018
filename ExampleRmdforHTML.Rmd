@@ -1,0 +1,197 @@
+---
+title: "Data Dictionary"
+author: "Berndsen, Roy, and Sutton"
+date: "Developed January 26, 2018"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(ggrepel)
+library(reshape2)
+library(readr)
+library(readxl)
+library(broom)
+library(cowplot)
+library(kableExtra)
+
+```
+
+### REVISED: `r Sys.Date()`
+
+## analysis.tab
+
+```{r message=FALSE, warning=FALSE,fig.height=5, fig.width=5}
+#Load Data
+data <- read_table("Clean_Tetherin_analysis.tab")
+
+#rename data columns
+colnames(data) <- c("Time[ps]", "Energy[kJ/mol]", "Bond", "Angle", "Dihedral", "Planarity", "Coulomb", "VdW", "RMSDs[A]:CA", "Backbone", "HeavyAtoms")
+
+#Split table in two chunks for easier visualizing, do not do this during analysis
+working <- data[1:6, 1:6]
+workingtwo <- data[1:6, 7:11]
+
+#Show data organization
+knitr::kable(working, "html") %>% kable_styling(bootstrap_options = c("striped", "condensed"), full_width = FALSE)
+
+knitr::kable(workingtwo, "html") %>% kable_styling(bootstrap_options = c("striped", "condensed"), full_width = FALSE)
+
+```
+
+### Table Definitions
+
+**Time [ps]** = Time in picoseconds
+
+**Energy [kJ/mol]** = Energy in kilojoules per mole at X time
+
+**Bond** = Bond energy in kilojoules per mole at X time
+
+**Angle** = Angle energy in kilojoules per mole at X time
+
+**Dihedral** = Energy in dihedral angles in kilojoules per mole at X time
+
+**Planarity** = Energy in planary bonds in kilojoules per mole at X time
+
+**Coulomb** = Energy of Coulombic interactions in kilojoules per mole at X time
+
+**VdW** = Energy of van der Waals in kilojoules per mole at X time
+
+**RMSDs[A]:CA** = Root Mean Square Deviation from initial model in Angstroms for the Calpha atoms
+
+**Backbone** = Root Mean Square Deviation from initial model in Angstroms for the backbone (Calpha, C, and N) atoms
+
+**HeavyAtoms** = Root Mean Square Deviation from initial model in Angstroms for the all the non-H atoms including side chains
+
+
+
+***
+
+\pagebreak
+
+## analysisres.tab
+
+```{r message = FALSE, warning = FALSE}
+#Load Data
+datares <- read_table("Clean_Tetherin_analysisres.tab")
+colnames(datares) <- c("Residue", "RMSDs[A]:CA", "Backbone", "HeavyAtoms")
+
+#Clean Data
+datares2 <- colsplit(datares$HeavyAtoms, " ", c("Heavy", "RMSF"))
+datares <- bind_cols(datares, datares2)
+datares <- datares %>% select(-HeavyAtoms)
+colnames(datares) <- c("Residue", "RMSDs[A]:CA", "Backbone RMSD", "Heavy Atoms RMSD", "RMSF[A]")
+
+#Show data organization
+workingres <- datares[1:6, 1:5]
+knitr::kable(workingres, "html") %>% kable_styling(bootstrap_options = c("striped", "condensed"), full_width = FALSE)
+
+```
+
+### Table Definitions
+
+**Residue** = Amino acid in Tetherin in 3 letter code with position number and molecule assignment
+
+**RMSDs[A]:CA** = Root Mean Square Deviation from initial model in Angstroms for the Calpha atoms
+
+**Backbone RMSD** = Root Mean Square Deviation from initial model in Angstroms for the backbone (Calpha, C, and N) atoms
+
+**Heavy Atoms RMSD** = Root Mean Square Deviation from initial model in Angstroms for the all the non-H atoms including side chains
+
+**RMSF[A]** = Root Mean Square Flucuation for the back bone atoms in angstroms
+
+***
+
+
+\pagebreak
+
+### dccm.tab
+
+
+```{r message = FALSE, warning = FALSE}
+#Load data
+dccmdata <- read_table2("Clean_Tetherin_dccm.tab", col_names = FALSE, skip = 1)
+
+#Create row and column names file
+vec <- datares %>% filter(!is.na(Residue))
+namesvec <- vec[['Residue']]
+
+#name the columns in the dccm
+colnames(dccmdata) <- c(namesvec)
+
+#Add the row names
+Residue <- datares %>% filter(!is.na(Residue)) %>% select(Residue)
+dccmdata <- dccmdata[1:317, 1:317]
+dccmdata <- bind_cols(Residue, dccmdata)
+
+#Show the table
+dccmdisplay <- dccmdata[1:7, 1:7]
+
+knitr::kable(dccmdisplay, "html") %>% kable_styling(bootstrap_options = c("striped", "condensed"), full_width = FALSE)
+
+
+```
+
+### Table Definitions
+
+**Residue** = The amino acid type, position number and molecule for the data.
+
+**All other columns** = The normalized correlation of the movement of the amino acid in residue and the amijno acid in the column name. Range spans from -1 to +1 with -1 being anticorrelated and +1 full correlated. 
+
+
+\pagebreak
+
+### SecStrAnalysis.tab
+
+
+```{r message = FALSE, warning = FALSE}
+#Load required data sets
+SecStr <- read_table2("Clean_Tetherin_SecStrAnalysis.tab", col_names = FALSE, skip = 2)
+RMSf <- read_table("Clean_Tetherin_analysisres.tab")
+colnames(RMSf) <- c("Residue", "RMSDs[A]:CA", "Backbone", "HeavyAtoms")
+
+#split names column in RMSf
+colnames(RMSf) <- c("Residue", "RMSDs[A]:CA", "Backbone", "HeavyAtoms")
+RMSf <- RMSf %>% separate(., Residue, into = c("AAtype", "ResNum", "Mol"))
+
+#Make final object and remove NA
+RMSF <<- RMSf %>% filter(!is.na(ResNum))
+
+#Create names vector
+vec <- RMSF %>% select(1:3) %>% filter(!is.na(ResNum)) %>% unite(AA, AAtype, ResNum, Mol, sep = "_")
+namesvec <- vec[['AA']]
+  
+#name the columns in the df
+colnames(SecStr) <- c("Time", namesvec)
+
+#Show part of the data
+SecStrdisplay <- SecStr[1:7, 1:7]
+
+knitr::kable(SecStrdisplay, "html") %>% kable_styling(bootstrap_options = c("striped", "condensed"), full_width = FALSE) 
+
+
+```
+
+### Table Definitions
+
+**Time** = Time in picoseconds
+
+**All other columns** = The assigned secondary structure for the amino acid indicated in the position. 
+  
+*Categories of secondary structure are:*
+
+H = alpha helix (n to n+4 hydrogen bond)
+
+E/EE = beta strand
+
+T = turn
+
+G = 3/10 helix (n to n+3 hydrogen bond)
+
+I = pi helix (n to n+5 hydrogen bond)
+
+C = everything not described above
