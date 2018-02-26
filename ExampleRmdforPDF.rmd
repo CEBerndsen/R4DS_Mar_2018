@@ -1,0 +1,113 @@
+---
+title: "Malachite Green Assay"
+author: " "
+date: " "
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(cowplot)
+
+```
+
+## Introduction
+
+Pyrophosphatases and other phosphate metabolizing enzymes are of great interest to scientists because of the key role of phosphate and activated phosphates such as those in ATP in biology. There are a variety of assay methods for these enzymes including using radioactive ^32^P labeled phosphate or coupling phosphate production to another enzyme such as the maltose phosphorylase-glucose oxidase-peroxidase system. However, these methods require specialized equipment or assay set ups. In this lab we will use one of the oldest methods for monitoring phosphate production, the formation of phosphomolybdate. 
+
+The general reaction scheme for the assay is as follows:
+
+$$ PO_4^{3-} + (NH_4)_2MoO_4 \rightarrow H_3PMo_{12}O_{40} + 2 H^+ ~~~~Reaction~1$$
+$$ H_3PMo_{12}O_{40} + malachite~green    \rightarrow (MG^+)(H_2PMo_{12}O_{40}) ~~~~Reaction~2 $$
+Malachite green on the left side of Reaction 2 absorbs light at ~450 nm while when it forms a complex with phosphomolbydate it turns green and absorbs around 640 nm. The absorbance of the malachite green-phosphomolybdate is directly proportional to the amount of phosphate produced. Using a standard curve of known phosphate concentrations absorbance can be converted to concentration of phosphate formed (see section on standards below). 
+
+
+\pagebreak
+
+##Assay protocol
+
+###Required solutions
+*Malachite solution:* 60 mL H~2~SO~4~, 0.44 g malachite green, 300 mL DI water
+  
+  **Note:** *adding H~2~SO~4~ to water is an exothermic reaction, so wait for the solution to reach room temp before adding malachite green.*
+  
+*7.5% (w/v) ammonium molybdate* 
+
+*11% (v/v) Tween*
+
+*Assay Buffer:* 2.5 mM MgCl~2~(H~2~O)~6~, 20 mM Tris HCl pH 8.5, 3 M NaCl
+  
+  **Note:** *This buffer can be changed to suit experiment needs.*
+
+###Assay
+1.	Prepare color reagent in a 1.5 mL Eppendorf: 1 mL orange dye, 250 $\mu$L 7.5% ammonium molybdate (wt/vol), and 20 $\mu$L of 11% tween 20 (vol/vol). 
+
+2.  Prepare each reaction mixture such that the total volume is 500 $\mu$L, with 1mM PP~i~, and 0.5-1 ug HvPP~i~ (diluted with Assay buffer). 
+
+3.  Incubate reaction **without enzyme** in a water bath at 42 ^o^C (or whatever experimental temperature) for 1 minute.
+
+4.  Add enzyme to start the reaction and return reaction to waterbath. A control reaction should be performed where water is added instead of enzyme.
+
+5.  After 10 minutes, quench the reaction by adding 80 $\mu$L of reaction to 20 $\mu$L of color reagent. 
+
+6.  After 10 minutes, dilute sample to 1 mL in water in a cuvette and read absorbance at 640 nm.
+
+**Note:** Reaction time, temperature, concentration of pryophosphate, salt concentration, etc. can be changed if needed.
+
+
+\pagebreak
+
+## Phosphate standard curve
+
+Dilute stock of phosphate in final volume of 100 $\mu$L to the concentrations listed in the table. 
+
+```{r phosphate table, echo=FALSE, warning=FALSE, message=FALSE}
+
+std_tbl <- data_frame('Standard number' = seq(1,8, by = 1),
+                      'Phosphate concentration (uM)' = c(0, 1, 5, 10, 20, 30, 50, 100),
+                      'uL of Phosphate to add to 100 uL' = c("","","","","","","",""))
+
+knitr::kable(std_tbl, align = c("c", "c", "r"))
+
+
+```
+
+After making standards, add 80 $\mu$L of standard to 20 $\mu$L of color reagent and let incubate for 10 minutes at room temperature. After 10 minutes, dilute sample to 1 mL in water in a cuvette and read absorbance at 640 nm.
+
+### Plotting the standard curve
+Plot data as absorbance at 640 nm (y) vs. concentration of phosphate (x) like below and fit the data to a linear trendline as below.
+
+```{r phosphate curve, echo=FALSE, warning=FALSE, message=FALSE, fig.height=4, fig.width=4, fig.align="center"}
+
+std_df <- data_frame(conc = c(0, 1, 5, 10, 20, 30, 50, 100),
+                     abs = c(0.0318, 0.0698, 0.2218, 0.4118, 0.7918, 1.1718, 1.9318, 3.8318))
+
+ggplot(std_df, aes(x = conc, y = abs), color = "blue") +
+  geom_jitter(alpha = 0.4, height = 0.2, width = 0.2) +
+  geom_smooth(se = FALSE, color = "black") +
+  theme_bw() +
+  labs(x = "Concentration of Phosphate uM", y = "Absorbance at 640 nm", title = "Phosphate Standard curve") +
+  annotate("text", x = 75, y = 1, label = "y = 0.038x + 0.0318", size = 5) +
+  theme(axis.title = element_text(size = 15, face = "bold"), axis.text = element_text(size = 10, face = "bold"))
+
+
+```
+
+
+Using the equation from the plot above, the absorbance measured for the enzyme reaction is inserted for y and then the equation is solved for x to get concentration of phosphate formed. This value is divided by 2 since pyrophosphate contains two phosphates. The rate can be determined by dividing concentration of phosphate by time. 
+
+##Important information
+
+* When reporting data from enzyme assays it is important to show all standard curves and perform replicates! 
+
+* Absorbance values that are outside (either high or low) of the range of absorbances of the standard curve *cannot* be used. 
+
+* A standard curve must be performed everyday for each new reaction and read at the same time. 
+
+* Report R^2^ values for standard curve fits
+
+
