@@ -1,0 +1,296 @@
+---
+title: "CD spectra"
+author: "Christopher Berndsen"
+date: "February 16, 2018"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(cowplot)
+library(magick)
+```
+
+## Protein Secondary Structure
+
+Secondary structure of proteins are interactions between non-consecutive amino acids within a single polypeptide or protein chain. Secondary structures fall into three main categories:
+
+1. Helices
+
+2. Beta strands
+
+3. Random Coils
+
+
+There are sub-categories within each of these three structures, however we will limit our discussion to these three for now. **Helices** are formed when amino acids form a hydrogen bond between the backbone carbonyl of one amino acid and the backbone amine of an amino acid 3 to 4 positions away. **Beta Strands** are a fully extended chain of amino acids, which typically form hydrogen bonds with other beta strands to form **beta sheets**. When a structure falls into neither of these categories we usually say the region is unstructured or in a **random coil**. 
+
+More information on [secondary structure](https://www.ncbi.nlm.nih.gov/books/NBK22580/) from NCBI. 
+
+
+## Circular Dichroism
+
+Most amino acids are **chiral** and therefore proteins are also chiral. The chirality of proteins means that they will preferentially absorb polarized light in one direction. The unequal absorbance of circularly polarized light is called **circular dichroism (CD)** and measuring the CD of proteins is the standard method for determining secondary structure. For more information and explanantions on CD spectroscopy of proteins see [Using circular dichroism spectra to estimate protein secondary structure](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2728378/) by Norma Greenfield. 
+
+The different structures of protein absorb circularly polarized light and therefore have distinct CD spectra. 
+
+
+
+
+```{r CD spectra, echo=FALSE, warning=FALSE, message=FALSE, fig.align="center"}
+#Dataset for displaying
+CDdat <- data.frame(lambda = seq(190, 250, by = 0.1))
+
+CDdat <- CDdat %>% mutate(helix = 1*10^8 * (2230060.04151075*lambda^0 +
+                                             -100548.516559741*lambda^1 +
+                                             2037.18080475746*lambda^2 + 
+                                             -24.4244919907991*lambda^3 +
+                                             0.19190243015954*lambda^4 +
+                                             -0.00103245782924168*lambda^5 +
+                                             0.00000385211889091252*lambda^6 +
+                                             -9.84175959744622E-09*lambda^7 +
+                                             1.64786777298595E-11*lambda^8 +
+                                             -1.63282751503442E-14*lambda^9 +
+                                             7.27089674019501E-18*lambda^10)) %>% 
+                  mutate(beta = 1*10^8 * (-677807.330017282*lambda^0 +
+                                            30975.2707887604*lambda^1 +
+                                            -636.143263740698*lambda^2 + 
+                                            7.73164864362657*lambda^3 +
+                                            -6.15861633716145E-02*lambda^4 +
+                                            3.35943314432255E-04*lambda^5 +
+                                            -1.27092416556044E-06*lambda^6 +
+                                            3.29272089581372E-09*lambda^7 +
+                                            -5.59118151750062E-12*lambda^8 +
+                                            5.61899389095424E-15*lambda^9 +
+                                            -2.53794637234403E-18*lambda^10)) %>%
+                  mutate(coil = 1*10^8 * (-580939.072386969*lambda^0 +
+                                            25845.2673351998*lambda^1 +
+                                            -516.713088253122*lambda^2 + 
+                                            6.1134023680003*lambda^3 +
+                                            -4.74021175198809E-02*lambda^4 +
+                                            2.51692531821056E-04*lambda^5 +
+                                            -9.26824208397782E-07*lambda^6 +
+                                            2.33714935193268E-09*lambda^7 +
+                                            -3.86247107852678E-12*lambda^8 +
+                                            3.77764956561175E-15*lambda^9 +
+                                            -1.6603998403172E-18*lambda^10))
+
+
+
+#Generate plots for pure secondary structures
+ggplot() +
+    geom_point(data = CDdat, aes(x = lambda, y = helix), color = "red") +
+    geom_point(data = CDdat, aes(x = lambda, y = beta), color = "blue") +
+    geom_point(data = CDdat, aes(x = lambda, y = coil), color = "magenta") +
+    scale_x_continuous(breaks = seq(190, 250, by = 5)) +
+    labs(x = "wavelength (nm)", y = "Ellipticity", title = "CD spectrum of protein seconday structures") +
+    theme(axis.text = element_text(size = 10, face = "bold"), axis.title = element_text(size = 16, face = "bold")) +
+    annotate("text", x = 202, y = 50000, label = "Helical", color = "red", size = 5) +
+    annotate("text", x = 195, y = 20000, label = "Beta \nSheet", color = "blue", size = 5) +
+    annotate("text", x = 195, y = -22000, label = "Random \nCoil", color = "magenta", size = 5)
+
+
+
+
+```
+
+
+The data in the figure above shows that helical structures have two minima at 222 nm and ~212 nm, while the spectrum for beta sheets will have a minimum at 217 nm. Proteins that are in random coil structures will have a minimum around 195 nm. 
+
+
+## CD in monitoring protein structure changes
+
+In addition to measuring protein secondary structures, CD can be used to monitor how protein structure is changing in response to environmental conditions such as salts ([example](https://www.sciencedirect.com/science/article/pii/S0301462213001361?via%3Dihub)) or temperature ([example](https://pubs.acs.org/doi/10.1021/acs.biochem.5b01362)). Whether the overall structure is changing or if the protein is unfolding, both will likely show changes in protein secondary structure. 
+
+The data below show how the CD spectrum for an alpha helical would proceed as the protein unfolds or "melts" in response to increasing temperature.
+
+```{r helix Melting curve, echo=FALSE, warning=FALSE, message=FALSE, fig.align="center"}
+
+#Make melting curve
+CDmelt <- CDdat %>% mutate('20C' = 1*helix + 0*beta + 0*coil) %>%
+  mutate('30C' = 0.95*helix + 0*beta + 0.05*coil) %>%
+  mutate('40C' = 0.85*helix + 0*beta + 0.2*coil) %>%
+  mutate('50C' = 0.65*helix + 0*beta + 0.35*coil) %>%
+  mutate('60C' = 0.4*helix + 0*beta + 0.6*coil) %>%
+  mutate('70C' = 0.2*helix + 0*beta + 0.8*coil) %>%
+  mutate('80C' = 0.05*helix + 0*beta + 0.95*coil) %>%
+  mutate('90C' = 0*helix + 0*beta + 1*coil) %>%
+  select(1, 5:12) %>%
+  gather(Temperature, CD, 2:9)
+
+ggplot(CDmelt, aes(x = lambda, y = CD, color = Temperature)) +
+  geom_point(alpha = 0.4) +
+  scale_x_continuous(breaks = seq(190, 250, by = 5)) +
+  labs(x = "wavelength (nm)", y = "Ellipticity", title = "Melting of a helical protein") +
+  theme(axis.text = element_text(size = 10, face = "bold"), axis.title = element_text(size = 16, face = "bold"))
+
+
+
+
+
+
+```
+
+
+Below is a similar plot but for a beta sheet protein
+
+```{r sheet Melting curve, echo=FALSE, warning=FALSE, message=FALSE, fig.align="center"}
+
+#Make melting curve
+CDmeltbeta <- CDdat %>% mutate('20C' = 0*helix + 1*beta + 0*coil) %>%
+  mutate('30C' = 0*helix + 0.95*beta + 0.05*coil) %>%
+  mutate('40C' = 0*helix + 0.85*beta + 0.2*coil) %>%
+  mutate('50C' = 0*helix + 0.65*beta + 0.35*coil) %>%
+  mutate('60C' = 0*helix + 0.4*beta + 0.6*coil) %>%
+  mutate('70C' = 0*helix + 0.5*beta + 0.8*coil) %>%
+  mutate('80C' = 0*helix + 0.05*beta + 0.95*coil) %>%
+  mutate('90C' = 0*helix + 0*beta + 1*coil) %>%
+  select(1, 5:12) %>%
+  gather(Temperature, CD, 2:9)
+
+#Plot data
+ggplot(CDmeltbeta, aes(x = lambda, y = CD, color = Temperature)) +
+  geom_point(alpha = 0.4) +
+  scale_x_continuous(breaks = seq(190, 250, by = 5)) +
+  labs(x = "wavelength (nm)", y = "Ellipticity", title = "Melting of a beta sheet protein") +
+  theme(axis.text = element_text(size = 10, face = "bold"), axis.title = element_text(size = 16, face = "bold"))
+
+
+```
+
+
+## CD of mixed structure proteins
+
+In reality, most proteins are a mix of helical, beta strand/sheet, and coils. While CD is still useful for observing if the proteins show secondary structure consistent with being folded or for comparing a mutated protein to the unmutated version, it is harder to definitively assign secondary structure. A few examples of proteins and  their CD spectrum are shown below. The protein data is shown in black, while the helical, beta sheet, and random coil standard spectra are shown in red, blue, and magenta, respectively. 
+
+###Mostly helical
+```{r BST CD, echo=FALSE, warning=FALSE, message=FALSE, fig.align="center", fig.height=8}
+#Load image
+BST <- image_read('bst.png')
+BSTp <- ggdraw() + draw_image(BST)
+
+#make CD plot
+BSTCD <- CDdat %>% 
+  mutate(BST = 0.92*helix + 0*beta + 0.08*coil )
+
+pBST <- ggplot(BSTCD, aes(x = lambda, y = BST)) +
+  geom_jitter(alpha = 0.5) +
+  geom_line(data = BSTCD, aes(x = lambda, y = helix), color = "red", size = 1) +
+  geom_line(data = BSTCD, aes(x = lambda, y = beta), color = "blue", size = 1) +
+  geom_line(data =BSTCD, aes(x = lambda, y = coil), color = "magenta", size = 1) +
+  scale_x_continuous(breaks = seq(190, 250, by = 5)) +
+  labs(x = "wavelength (nm)", y = "Ellipticity", caption = "92% helix, 8% random coil", title = "Predicted CD spectrum of BST2 (PDB ID: 3MQB)") +
+  theme(axis.text = element_text(size = 10, face = "bold"), axis.title = element_text(size = 16, face = "bold"))
+
+plot_grid(BSTp, pBST, ncol = 1)
+
+
+```
+
+### Mostly helix and random coil
+```{r cranCD, echo=FALSE, warning=FALSE, message=FALSE, fig.align="center", fig.height=8}
+#Load image
+CR <- image_read('crn.png')
+CRpic <- ggdraw() + draw_image(CR)
+
+#make CD plot
+predCD <- CDdat %>% 
+  mutate(pred = 0.46*helix + 0.17*beta + 0.37*coil )
+
+plot <- ggplot(predCD, aes(x = lambda, y = pred)) +
+  geom_jitter(alpha = 0.5) +
+  geom_line(data = predCD, aes(x = lambda, y = helix), color = "red", size = 1) +
+  geom_line(data = predCD, aes(x = lambda, y = beta), color = "blue", size = 1) +
+  geom_line(data = predCD, aes(x = lambda, y = coil), color = "magenta", size = 1) +
+  scale_x_continuous(breaks = seq(190, 250, by = 5)) +
+  labs(x = "wavelength (nm)", y = "Ellipticity", caption = "46% helix, 17% Beta Sheet, 37% random coil", title = "Predicted CD spectrum of Crambim (PDB ID: 1CRN)") +
+  theme(axis.text = element_text(size = 10, face = "bold"), axis.title = element_text(size = 16, face = "bold"))
+
+plot_grid(CRpic, plot, ncol = 1)
+
+
+```
+
+
+###Mostly Beta sheet and random coil
+```{r IgCD, echo=FALSE, warning=FALSE, message=FALSE, fig.align="center", fig.height=8}
+#Load image
+Ig <- image_read('ig59.png')
+Igpic <- ggdraw() + draw_image(Ig)
+
+#make CD plot
+predCD <- CDdat %>% 
+  mutate(pred = 0*helix + 0.54*beta + 0.46*coil )
+
+plot <- ggplot(predCD, aes(x = lambda, y = pred)) +
+  geom_jitter(alpha = 0.5) +
+  geom_line(data = predCD, aes(x = lambda, y = helix), color = "red", size = 1) +
+  geom_line(data = predCD, aes(x = lambda, y = beta), color = "blue", size = 1) +
+  geom_line(data = predCD, aes(x = lambda, y = coil), color = "magenta", size = 1) +
+  scale_x_continuous(breaks = seq(190, 250, by = 5)) +
+  labs(x = "wavelength (nm)", y = "Ellipticity", caption = "54% Beta Sheet, 46% random coil", title = "Predicted CD spectrum of Ig59 (PDB ID: 5TZM)") +
+  theme(axis.text = element_text(size = 10, face = "bold"), axis.title = element_text(size = 16, face = "bold"))
+
+plot_grid(Igpic, plot, ncol = 1)
+
+
+```
+
+```{r Ub CD, echo=FALSE, warning=FALSE, message=FALSE, fig.align="center", fig.height=8}
+#Load image
+Ub <- image_read('Ub.png')
+Ubpic <- ggdraw() + draw_image(Ub)
+
+#make CD plot
+UbCD <- CDdat %>% 
+  mutate(Ub = 0.17*helix + 0.4*beta + 0.43*coil )
+
+pUb <- ggplot(UbCD, aes(x = lambda, y = Ub)) +
+  geom_jitter(alpha = 0.5) +
+  geom_line(data = UbCD, aes(x = lambda, y = helix), color = "red", size = 1) +
+  geom_line(data = UbCD, aes(x = lambda, y = beta), color = "blue", size = 1) +
+  geom_line(data =UbCD, aes(x = lambda, y = coil), color = "magenta", size = 1) +
+  scale_x_continuous(breaks = seq(190, 250, by = 5)) +
+  labs(x = "wavelength (nm)", y = "Ellipticity", caption = "17% helix, 40% Beta Sheet, 43% random coil", title = "Predicted CD spectrum of Ubiquitin (PDB ID: 1UBQ)") +
+  theme(axis.text = element_text(size = 10, face = "bold"), axis.title = element_text(size = 16, face = "bold"))
+
+plot_grid(Ubpic, pUb, ncol = 1)
+```
+
+```{r WD, echo=FALSE, warning=FALSE, message=FALSE, fig.align="center", fig.height=8}
+#Load image
+wd <- image_read('wd.png')
+wdpic <- ggdraw() + draw_image(wd)
+
+#make CD plot
+predCD <- CDdat %>% 
+  mutate(pred = 0.0*helix + 0.59*beta + 0.41*coil )
+
+plot <- ggplot(predCD, aes(x = lambda, y = pred)) +
+  geom_jitter(alpha = 0.5) +
+  geom_line(data = predCD, aes(x = lambda, y = helix), color = "red", size = 1) +
+  geom_line(data = predCD, aes(x = lambda, y = beta), color = "blue", size = 1) +
+  geom_line(data = predCD, aes(x = lambda, y = coil), color = "magenta", size = 1) +
+  scale_x_continuous(breaks = seq(190, 250, by = 5)) +
+  labs(x = "wavelength (nm)", y = "Ellipticity", caption = "59% Beta Sheet, 41% random coil", title = "Predicted CD spectrum of WD domain (PDB ID: 1ERJ)") +
+  theme(axis.text = element_text(size = 10, face = "bold"), axis.title = element_text(size = 16, face = "bold"))
+
+plot_grid(wdpic, plot, ncol = 1)
+
+
+```
+
+
+
+
+##Summary
+
+The data and examples above show the utility and limitations of circular dichroism spectroscopy of proteins in determining seconday structure of proteins. A lot of information regarding the unfolding pathway of the protein and effects of ligands or solvent conditions can be learned. However, CD alone is not a good technique to study the entire structure of the protein as it provides limited to no information on the tertiary and quaternary structure of proteins. The iamges above each spectrum show how similar secondary structure content can fold in many unique ways. However, in combination with X-ray crystallography, NMR, and computational techniques such as molecular dynamics how secondary structures associate can be determined. 
+
+
+***
+
+
