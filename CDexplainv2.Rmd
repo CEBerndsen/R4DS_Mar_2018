@@ -1,0 +1,383 @@
+---
+title: "Circular Dichroism"
+author: "Christopher E. Berndsen"
+date: "February 23, 2018"
+output: html_document
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(shiny)
+```
+## Protein Secondary Structure
+
+Secondary structure of proteins are interactions between non-consecutive amino acids within a single polypeptide or protein chain. Secondary structures fall into three main categories:
+
+1. Helices
+
+2. Beta strands
+
+3. Random Coils
+
+
+There are sub-categories within each of these three structures, however we will limit our discussion to these three for now. **Helices** are formed when amino acids form a hydrogen bond between the backbone carbonyl of one amino acid and the backbone amine of an amino acid 3 to 4 positions away. **Beta Strands** are a fully extended chain of amino acids, which typically form hydrogen bonds with other beta strands to form **beta sheets**. When a structure falls into neither of these categories we usually say the region is unstructured or in a **random coil**. 
+
+More information on [secondary structure](https://www.ncbi.nlm.nih.gov/books/NBK22580/) from NCBI. 
+
+
+## Circular Dichroism
+
+Most amino acids are **chiral** and therefore proteins are also chiral. The chirality of proteins means that they will preferentially absorb polarized light in one direction. The unequal absorbance of circularly polarized light is called **circular dichroism (CD)** and measuring the CD of proteins is the standard method for determining secondary structure. For more information and explanantions on CD spectroscopy of proteins see [Using circular dichroism spectra to estimate protein secondary structure](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2728378/) by Norma Greenfield. 
+
+The different structures of protein absorb circularly polarized light and therefore have distinct CD spectra. 
+
+```{r CD spectra, echo=FALSE, warning=FALSE, message=FALSE, fig.align="center"}
+#Dataset for displaying
+CDdat <- data.frame(lambda = seq(190, 250, by = 0.1))
+
+CDdat <- CDdat %>% mutate(helix = 1*10^8 * (2230060.04151075*lambda^0 +
+                                             -100548.516559741*lambda^1 +
+                                             2037.18080475746*lambda^2 + 
+                                             -24.4244919907991*lambda^3 +
+                                             0.19190243015954*lambda^4 +
+                                             -0.00103245782924168*lambda^5 +
+                                             0.00000385211889091252*lambda^6 +
+                                             -9.84175959744622E-09*lambda^7 +
+                                             1.64786777298595E-11*lambda^8 +
+                                             -1.63282751503442E-14*lambda^9 +
+                                             7.27089674019501E-18*lambda^10)) %>% 
+                  mutate(beta = 1*10^8 * (-677807.330017282*lambda^0 +
+                                            30975.2707887604*lambda^1 +
+                                            -636.143263740698*lambda^2 + 
+                                            7.73164864362657*lambda^3 +
+                                            -6.15861633716145E-02*lambda^4 +
+                                            3.35943314432255E-04*lambda^5 +
+                                            -1.27092416556044E-06*lambda^6 +
+                                            3.29272089581372E-09*lambda^7 +
+                                            -5.59118151750062E-12*lambda^8 +
+                                            5.61899389095424E-15*lambda^9 +
+                                            -2.53794637234403E-18*lambda^10)) %>%
+                  mutate(coil = 1*10^8 * (-580939.072386969*lambda^0 +
+                                            25845.2673351998*lambda^1 +
+                                            -516.713088253122*lambda^2 + 
+                                            6.1134023680003*lambda^3 +
+                                            -4.74021175198809E-02*lambda^4 +
+                                            2.51692531821056E-04*lambda^5 +
+                                            -9.26824208397782E-07*lambda^6 +
+                                            2.33714935193268E-09*lambda^7 +
+                                            -3.86247107852678E-12*lambda^8 +
+                                            3.77764956561175E-15*lambda^9 +
+                                            -1.6603998403172E-18*lambda^10))
+
+
+
+#Generate plots for pure secondary structures
+ggplot() +
+    geom_point(data = CDdat, aes(x = lambda, y = helix), color = "red") +
+    geom_point(data = CDdat, aes(x = lambda, y = beta), color = "blue") +
+    geom_point(data = CDdat, aes(x = lambda, y = coil), color = "magenta") +
+    scale_x_continuous(breaks = seq(190, 250, by = 5)) +
+    labs(x = "wavelength (nm)", y = "Ellipticity", title = "CD spectrum of protein seconday structures") +
+    theme(axis.text = element_text(size = 10, face = "bold"), axis.title = element_text(size = 16, face = "bold")) +
+    annotate("text", x = 202, y = 50000, label = "Helical", color = "red", size = 5) +
+    annotate("text", x = 195, y = 20000, label = "Beta \nSheet", color = "blue", size = 5) +
+    annotate("text", x = 195, y = -22000, label = "Random \nCoil", color = "magenta", size = 5)
+
+
+
+
+```
+
+
+The data in the figure above shows that helical structures have two minima at 222 nm and ~212 nm, while the spectrum for beta sheets will have a minimum at 217 nm. Proteins that are in random coil structures will have a minimum around 195 nm. 
+
+
+## CD in monitoring protein structure changes
+
+In addition to measuring protein secondary structures, CD can be used to monitor how protein structure is changing in response to environmental conditions such as salts ([example](https://www.sciencedirect.com/science/article/pii/S0301462213001361?via%3Dihub)) or temperature ([example](https://pubs.acs.org/doi/10.1021/acs.biochem.5b01362)). Whether the overall structure is changing or if the protein is unfolding, both will likely show changes in protein secondary structure. 
+
+The data below show how the CD spectrum for an alpha helical would proceed as the protein unfolds or "melts" in response to increasing temperature.
+
+```{r helix Melting curve, echo=FALSE, warning=FALSE, message=FALSE, fig.align="center"}
+
+#Make melting curve
+CDmelt <- CDdat %>% mutate('20C' = 1*helix + 0*beta + 0*coil) %>%
+  mutate('30C' = 0.95*helix + 0*beta + 0.05*coil) %>%
+  mutate('40C' = 0.85*helix + 0*beta + 0.2*coil) %>%
+  mutate('50C' = 0.65*helix + 0*beta + 0.35*coil) %>%
+  mutate('60C' = 0.4*helix + 0*beta + 0.6*coil) %>%
+  mutate('70C' = 0.2*helix + 0*beta + 0.8*coil) %>%
+  mutate('80C' = 0.05*helix + 0*beta + 0.95*coil) %>%
+  mutate('90C' = 0*helix + 0*beta + 1*coil) %>%
+  select(1, 5:12) %>%
+  gather(Temperature, CD, 2:9)
+
+ggplot(CDmelt, aes(x = lambda, y = CD, color = Temperature)) +
+  geom_point(alpha = 0.4) +
+  scale_x_continuous(breaks = seq(190, 250, by = 5)) +
+  labs(x = "wavelength (nm)", y = "Ellipticity", title = "Melting of a helical protein") +
+  theme(axis.text = element_text(size = 10, face = "bold"), axis.title = element_text(size = 16, face = "bold"))
+
+
+
+
+
+
+```
+
+
+Below is a similar plot but for a beta sheet protein
+
+```{r sheet Melting curve, echo=FALSE, warning=FALSE, message=FALSE, fig.align="center"}
+
+#Make melting curve
+CDmeltbeta <- CDdat %>% mutate('20C' = 0*helix + 1*beta + 0*coil) %>%
+  mutate('30C' = 0*helix + 0.95*beta + 0.05*coil) %>%
+  mutate('40C' = 0*helix + 0.85*beta + 0.2*coil) %>%
+  mutate('50C' = 0*helix + 0.65*beta + 0.35*coil) %>%
+  mutate('60C' = 0*helix + 0.4*beta + 0.6*coil) %>%
+  mutate('70C' = 0*helix + 0.5*beta + 0.8*coil) %>%
+  mutate('80C' = 0*helix + 0.05*beta + 0.95*coil) %>%
+  mutate('90C' = 0*helix + 0*beta + 1*coil) %>%
+  select(1, 5:12) %>%
+  gather(Temperature, CD, 2:9)
+
+#Plot data
+ggplot(CDmeltbeta, aes(x = lambda, y = CD, color = Temperature)) +
+  geom_point(alpha = 0.4) +
+  scale_x_continuous(breaks = seq(190, 250, by = 5)) +
+  labs(x = "wavelength (nm)", y = "Ellipticity", title = "Melting of a beta sheet protein") +
+  theme(axis.text = element_text(size = 10, face = "bold"), axis.title = element_text(size = 16, face = "bold"))
+
+
+```
+
+
+
+
+```{r CD, echo=FALSE}
+#input
+inputPanel(
+  selectInput("mode",
+                   "Which mode do you want to use?",
+                   choices = list("Prediction" = "predict",
+                                  "Display" = "display")
+        )
+        ,
+           
+     mainPanel(
+         #conditional panel 
+         conditionalPanel(
+           condition = "input.mode == 'predict'",
+           checkboxInput("guides", 
+                         "Show secondary structure guides?", 
+                         value = FALSE, 
+                         width = NULL)
+           ,
+           numericInput("helix",
+                        "% alpha helix",
+                        min = 0,
+                        max = 100,
+                        step = 5,
+                        value = 50)
+           ,
+           numericInput("sheet",
+                        "% beta sheet",
+                        min = 0,
+                        max = 100,
+                        step = 5,
+                        value = 50)
+           ,
+           numericInput("coil",
+                        "% random coil",
+                        min = 0,
+                        max = 100,
+                        step = 5,
+                        value = 0)
+           )
+         ,
+         conditionalPanel(
+           condition = "input.mode == 'display'",
+           selectInput("protein",
+                       "Pick a protein to show predicted data for",
+                       choices = list("Lysozyme (1LYD)" = "lyso",
+                                      "Ubiquitin (1UBQ)" = "ub",
+                                      "BST2 (3MQB)" = "bst",
+                                      "Hemoglobin (2HHB)" = "hemo",
+                                      "Antibody (1IGT)" = "ab")
+           )
+           ,
+           "Simulated numbers generated in YASARA using the PDB IDs indicated"
+           )
+         )
+)
+
+#output
+renderPlot({
+       if(input$mode == "predict") {
+       #check to make sure fractions add to 100%          
+       validate(
+         need(input$helix/100 + input$sheet/100 + input$coil/100 == 1, 
+              "% of helix, sheet, and coil must = 100%"
+              )
+       )
+     
+     
+       #generate basis set
+       CDdat <- data.frame(lambda = seq(190, 250, by = 0.2))
+       CDdat <- CDdat %>% mutate(helix = 1*10^8 * (2230060.04151075*lambda^0 +
+                                                   -100548.516559741*lambda^1 +
+                                                   2037.18080475746*lambda^2 + 
+                                                   -24.4244919907991*lambda^3 +
+                                                   0.19190243015954*lambda^4 +
+                                                   -0.00103245782924168*lambda^5 +
+                                                   0.00000385211889091252*lambda^6 +
+                                                   -9.84175959744622E-09*lambda^7 +
+                                                   1.64786777298595E-11*lambda^8 +
+                                                   -1.63282751503442E-14*lambda^9 +
+                                                   7.27089674019501E-18*lambda^10)) %>% 
+       mutate(beta = 1*10^8 * (-677807.330017282*lambda^0 +
+                                 30975.2707887604*lambda^1 +
+                                 -636.143263740698*lambda^2 + 
+                                 7.73164864362657*lambda^3 +
+                                 -6.15861633716145E-02*lambda^4 +
+                                 3.35943314432255E-04*lambda^5 +
+                                 -1.27092416556044E-06*lambda^6 +
+                                 3.29272089581372E-09*lambda^7 +
+                                 -5.59118151750062E-12*lambda^8 +
+                                 5.61899389095424E-15*lambda^9 +
+                                 -2.53794637234403E-18*lambda^10)) %>%
+       mutate(coil = 1*10^8 * (-580939.072386969*lambda^0 +
+                                 25845.2673351998*lambda^1 +
+                                 -516.713088253122*lambda^2 + 
+                                 6.1134023680003*lambda^3 +
+                                 -4.74021175198809E-02*lambda^4 +
+                                 2.51692531821056E-04*lambda^5 +
+                                 -9.26824208397782E-07*lambda^6 +
+                                 2.33714935193268E-09*lambda^7 +
+                                 -3.86247107852678E-12*lambda^8 +
+                                 3.77764956561175E-15*lambda^9 +
+                                 -1.6603998403172E-18*lambda^10))
+     
+       #Predict spectrum based on user input  
+       CDdat <- CDdat %>% mutate(prediction = (input$helix)/100*helix + (input$sheet/100)*beta + (input$coil/100)*coil)
+      
+      # draw the plot
+       if(input$guides == FALSE) {
+         ggplot(CDdat, aes(x = lambda, y = prediction/1000), color = "red") +
+           geom_jitter(alpha = 0.4) +
+           scale_x_continuous(breaks = seq(190, 250, by = 5)) +
+           labs(x = "wavelength (nm)", y = "Ellipticity", title = "Predicted CD spectrum") +
+           geom_hline(yintercept = 0) +
+           ylim(-50, 75) +
+           theme_classic() +
+           theme(axis.text = element_text(size = 10, face = "bold"), axis.title = element_text(size = 16, face = "bold"))
+       }
+       else {
+         ggplot() +
+           geom_jitter(data = CDdat, aes(x = lambda, y = prediction/1000), fill = "red", alpha = 0.4) +
+           geom_line(data = CDdat, aes(x = lambda, y = helix/1000), color = "red") +
+           geom_line(data = CDdat, aes(x = lambda, y = beta/1000), color = "green") +
+           geom_line(data = CDdat, aes(x = lambda, y = coil/1000), color = "purple") +
+           geom_hline(yintercept = 0) +
+           scale_x_continuous(breaks = seq(190, 250, by = 5)) +
+           labs(x = "wavelength (nm)", y = "Ellipticity", title = "Predicted CD spectrum") +
+           annotate("text", x = 235, y = 25, label = "Helix", color = "red", size = 5) +
+           annotate("text", x = 235, y = 20, label = "Beta Sheet", color = "green", size = 5) +
+           annotate("text", x = 235, y = 15, label = "Random Coil", color = "purple", size = 5) +
+           ylim(-50, 75) +
+           theme_classic() +
+           theme(axis.text = element_text(size = 10, face = "bold"), axis.title = element_text(size = 16, face = "bold"))
+        
+       }
+       }
+     else {
+       #Generate the wavelength values
+       CDdat <- data.frame(lambda = seq(190, 250, by = 0.2))
+       
+       #Generate the basis set from Abriata, L., J. Chem. Educ., 2011, 88 (9), pp 1268â1273 and Davidson, B. and Fasman, G. D., Biochemistry 1967 6 (6) 1616-1629
+       CDdat <- CDdat %>% mutate(helix = 1*10^8 * (2230060.04151075*lambda^0 +
+                                                     -100548.516559741*lambda^1 +
+                                                     2037.18080475746*lambda^2 + 
+                                                     -24.4244919907991*lambda^3 +
+                                                     0.19190243015954*lambda^4 +
+                                                     -0.00103245782924168*lambda^5 +
+                                                     0.00000385211889091252*lambda^6 +
+                                                     -9.84175959744622E-09*lambda^7 +
+                                                     1.64786777298595E-11*lambda^8 +
+                                                     -1.63282751503442E-14*lambda^9 +
+                                                     7.27089674019501E-18*lambda^10)) %>% 
+         mutate(beta = 1*10^8 * (-677807.330017282*lambda^0 +
+                                   30975.2707887604*lambda^1 +
+                                   -636.143263740698*lambda^2 + 
+                                   7.73164864362657*lambda^3 +
+                                   -6.15861633716145E-02*lambda^4 +
+                                   3.35943314432255E-04*lambda^5 +
+                                   -1.27092416556044E-06*lambda^6 +
+                                   3.29272089581372E-09*lambda^7 +
+                                   -5.59118151750062E-12*lambda^8 +
+                                   5.61899389095424E-15*lambda^9 +
+                                   -2.53794637234403E-18*lambda^10)) %>%
+         mutate(coil = 1*10^8 * (-580939.072386969*lambda^0 +
+                                   25845.2673351998*lambda^1 +
+                                   -516.713088253122*lambda^2 + 
+                                   6.1134023680003*lambda^3 +
+                                   -4.74021175198809E-02*lambda^4 +
+                                   2.51692531821056E-04*lambda^5 +
+                                   -9.26824208397782E-07*lambda^6 +
+                                   2.33714935193268E-09*lambda^7 +
+                                   -3.86247107852678E-12*lambda^8 +
+                                   3.77764956561175E-15*lambda^9 +
+                                   -1.6603998403172E-18*lambda^10))
+       
+         #Predict spectrum based on user input  
+         CDdat <- CDdat %>% 
+         mutate(display = case_when(
+           input$protein == 'lyso' ~ 0.7*helix + 0.07*beta + 0.17*coil,
+           input$protein == 'ub' ~ 0.17*helix + 0.40*beta + 0.43*coil,
+           input$protein == 'bst' ~ 0.92*helix + 0*beta + 0.08*coil,
+           input$protein == 'hemo' ~ 0.74*helix + 0*beta + 0.17*coil,
+           input$protein == 'ab' ~ 0.05*helix + 0.46*beta + 0.36*coil))
+         
+        ggplot() +
+         geom_jitter(data = CDdat, aes(x = lambda, y = display/1000), fill = "red", alpha = 0.4) +
+         geom_line(data = CDdat, aes(x = lambda, y = helix/1000), color = "red") +
+         geom_line(data = CDdat, aes(x = lambda, y = beta/1000), color = "green") +
+         geom_line(data = CDdat, aes(x = lambda, y = coil/1000), color = "purple") +
+         geom_hline(yintercept = 0) +
+         scale_x_continuous(breaks = seq(190, 250, by = 5)) +
+         labs(x = "wavelength (nm)", y = "Ellipticity") +
+         annotate("text", x = 235, y = 27, label = "Helix", color = "red", size = 7) +
+         annotate("text", x = 235, y = 20, label = "Beta Sheet", color = "green", size = 7) +
+         annotate("text", x = 235, y = 13, label = "Random Coil", color = "purple", size = 7) +
+         ylim(-50, 75) +
+         theme_classic() +
+         theme(axis.text = element_text(size = 10, face = "bold"), axis.title = element_text(size = 16, face = "bold"))
+         
+         
+         
+     }
+})
+   
+   
+renderText({
+     if(input$mode == "predict") {
+       paste("Spectrum showing", input$helix, "% alpha helix", input$sheet, "% beta sheet", input$coil, "% random coil")
+       
+     }
+     else{
+     label <- case_when(
+           input$protein == 'lyso' ~ "70% helix, 7% beta strand, 17% random coil",
+           input$protein == 'ub' ~ "17% helix, 40% beta strand, 43% random coil",
+           input$protein == 'bst' ~ "92% helix, 0% beta strand, 8% random coil",
+           input$protein == 'hemo' ~ "74% helix, 0% beta strand, 17% random coil",
+           input$protein == 'ab' ~ "5% helix, 46% beta strand, 36% random coil")
+       
+           paste("Structure contains", label)
+     }
+   })
+
+```
