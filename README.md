@@ -13,3 +13,5 @@ CD.Rmd is the source for CD.html
 app.R is the r shiny code for the shiny app: https://berndsen.shinyapps.io/cdapp/
 
 CDexplainv2.Rmd is an rmarkdown document with a shiny interactive plot incorporated. 
+
+R4DS_Mar2018 are the slides in either PowerPoint or PDF format for viewing
