@@ -1,0 +1,568 @@
+---
+title: "Mutant report"
+author: "Name"
+date: "Date"
+output: 
+   html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(readr)
+library(readxl)
+library(ggrepel)
+library(DT)
+library(broom)
+library(cowplot)
+library(RColorBrewer)
+```
+
+```{r Data, echo=FALSE, warning=FALSE, message=FALSE}
+#Set common file name
+mut <- "XXX" 
+
+#Set display name of mutation for figures
+mutname <- "XXX###XXX"
+
+# wt <- read_table2(paste(mut,"analysisres.tab", sep = "_"), col_names = FALSE, skip = 1)
+
+#Load RMSD data
+RMSd <- read_table2(paste(mut,"analysis.tab", sep = "_"))
+
+#Load RMSF data
+RMSf <- read_table2(paste(mut,"analysisres.tab", sep = "_"), col_names = FALSE, skip = 1)
+
+#Load Secondary Structure data
+SecStr <- read_table2(paste(mut,"SecStranalysis.tab", sep = "_"), col_names = FALSE, skip = 2)
+
+#Load DCCM data
+dccmdata <- read_table2(paste(mut,"dccm.tab", sep = "_"), col_names = FALSE, skip = 1)
+
+#Load pKa data
+
+
+```
+
+## Equilibration of `r mutname` model
+```{r RMSD plot, echo=FALSE, warning=FALSE, message=FALSE, fig.align="center"}
+
+#Rename columns to fix weirdness
+colnames(RMSd) <- c("Time", "Energytot", "Bond", "Angle", "Dihedral", "Planarity", "Coulomb", "VdW", "RMSDca", "RMSDbkbn", "RMSDheavy")
+  
+#remove NA column
+len <- length(RMSd) - 1
+  
+#remove YASARA generated stats
+rw <- nrow(RMSd) - 4
+  
+ #resize data frame
+RMSD <- RMSd[1:rw,1:len]
+  
+#set time as a number
+RMSD$Time <- as.numeric(RMSD$Time)
+  
+#show plot of RMSDca vs. time
+ggplot(RMSD, aes(x = Time, y = RMSDca)) +
+    geom_point(alpha = 0.4) +
+    geom_smooth(se = FALSE) +
+    labs(x = "Time in ps", y = expression(paste("Root Mean Square Deviation of C", alpha)), caption = paste("Structure: ", mutname)) +
+    theme(axis.text = element_text(size = 14, face = "bold", color = "grey50"), axis.title = element_text(size = 16, face = "bold"))
+
+
+```
+
+***
+
+```{r Energy plots, echo=FALSE, warning=FALSE, message=FALSE, fig.align="center", fig.height=8}
+
+## Make data long
+Energylong <- RMSD %>% gather(., Energy, Value, 2:8) %>% select(1, 5, 6)
+
+
+ggplot(Energylong, aes(x = Time, y = Value, color = Energy)) +
+    geom_line(size = 1) +
+    facet_grid(Energy~., scales = "free") +
+    labs(x = "Time in ps", y = "Energy in kJ/mol", caption = paste("Structure: ", mutname)) +
+    theme(axis.text = element_text(size = 14, face = "bold", color = "grey50"), axis.title = element_text(size = 16, face = "bold"))
+
+
+```
+
+
+***
+
+## Energy and Root Mean Square values
+```{r Energy table, echo=FALSE, warning=FALSE, message=FALSE}
+#Make tables
+summary <- RMSD %>% 
+  gather(., Attribute, Value, 2:11) %>% 
+  group_by(Attribute) %>% 
+  summarise(mean = mean(Value), sd = sd(Value), IQR = IQR(Value), max = max(Value), min = min(Value))
+  
+#identify RMSD columns
+RMD <- c("RMSDca", "RMSDbkbn", "RMSDheavy")
+  
+#Make Energy table
+Energy_tbl <<- summary %>% filter(!Attribute %in% RMD) %>% arrange(., sd)
+Energy_tbl$mean <- round(Energy_tbl$mean, 2)
+Energy_tbl$sd <- round(Energy_tbl$sd, 2)
+Energy_tbl$IQR <- round(Energy_tbl$IQR, 2)
+
+
+#print table
+datatable(Energy_tbl, 
+          class = 'cell-border stripe',
+          caption = "Table 1: Summary of Potential Energies"
+          )
+
+#knitr::kable(Energy_tbl, "html", caption = "Summary of Potential Energies") %>% kable_styling(bootstrap_options = c("striped", "condensed"), full_width = FALSE)   
+
+```
+
+***
+
+```{r RMS table, echo=FALSE, warning=FALSE, message=FALSE}
+#Make RMS table
+RMS_tbl <<- summary %>% filter(Attribute %in% RMD)
+RMS_tbl$mean <- round(RMS_tbl$mean, 2)
+RMS_tbl$sd <- round(RMS_tbl$sd, 2)
+RMS_tbl$IQR <- round(RMS_tbl$IQR, 2)
+
+#print table
+datatable(RMS_tbl, 
+          class = 'cell-border stripe',
+          caption = "Table 2: Summary of Root Mean Square Deviations"
+          )
+
+#knitr::kable(RMS_tbl, "html", caption = "Summary of Root Mean Square Deviations") %>% kable_styling(bootstrap_options = c("striped", "condensed"), full_width = FALSE)   
+
+```
+
+***
+
+#### **Data Explanation:** 
+Model was equilibrated for 10 ns at pH 7.4, 0.9% NaCl, 298K, with a density of 0.997 using an AMBER14 forcefield. The interactions cutoff was 12 angstroms in a cell with periodic boundaries extending 15 angstroms from the ectodomain. Explicit solvent was used in all simulations. 
+
+
+#### **Interpretation:**
+Data shown indicate that the model...(Speak on general shape. RMSD values +/- 1-2 angstroms are typical while finding RMSD flucuations > 1-2 are worth noteing. If need be look at energy totals and and sd coulumns )
+
+
+***
+
+
+## Secondary Structure Analysis
+```{r Secondary Structure plot, echo=FALSE, warning=FALSE, message=FALSE, fig.align="center"}
+#Set column names
+colnames(RMSf) <- c("AAtype", "ResNum", "Mol", "RMSDca", "RMSDbkbn", "RMSDheavy", "rmsf")
+  
+#Make final object and remove NA
+RMSF <<- RMSf %>% filter(!is.na(ResNum))
+
+#Create names vector
+vec <- RMSF %>% select(1:3) %>% filter(!is.na(ResNum)) %>% unite(AA, AAtype, ResNum, Mol, sep = "_")
+namesvec <- vec[['AA']]
+  
+#name the columns in the df
+colnames(SecStr) <- c("Time", namesvec)
+  
+#Make data frame long
+SecStrlong <- SecStr %>% gather(., AA, SS, 2:length(.)) %>% separate(., AA, c("AA", "ResNum", "Mol"), sep = "_")
+  
+#make resnum a numeric vector
+SecStrlong$ResNum <- as.numeric(SecStrlong$ResNum)
+  
+# Remove NA
+SecStrlong <- SecStrlong %>% filter(!is.na(Time))
+  
+#Make tile plot
+ggplot(SecStrlong, aes(x = ResNum, y = Time, fill = SS)) + 
+  geom_tile() +
+  #scale_fill_manual(labels = c("Coil", "3/10 Helix", "Helix", "Turn"), values = c("#99FF66", "#FF9999", "#FF6666", "blue"), guide = guide_legend(title = "Secondary \nStructure")) +
+  labs(x = "Amino Acid number", y = "Time in ps", caption = paste("Structure: ", mutname), title = "Secondary Structure features over time") +
+  theme(axis.text = element_text(size = 14, face = "bold", color = "grey50"), axis.title = element_text(size = 16, face = "bold"), plot.caption = element_text(face = "bold"))
+  
+
+
+```
+
+***
+
+```{r Secondary Structure table, echo=FALSE, warning=FALSE, message=FALSE}
+#Create names vector
+vec <- RMSF %>% select(1:3) %>% filter(!is.na(ResNum)) %>% unite(AA, AAtype, ResNum, Mol, sep = "_")
+namesvec <- vec[['AA']]
+  
+#name the columns in the df
+colnames(SecStr) <- c("Time", namesvec)
+  
+#Make data frame long
+SecStrlong <- SecStr %>% gather(., AA, SS, 2:length(.)) %>% separate(., AA, c("AA", "ResNum", "Mol"), sep = "_")
+  
+#make resnum a numeric vector
+SecStrlong$ResNum <- as.numeric(SecStrlong$ResNum)
+  
+# Remove NA
+SecStrlong <- SecStrlong %>% filter(!is.na(Time))
+  
+#Create table of Secondary Structure
+SecStr_tbl <- SecStrlong %>% group_by(ResNum, Mol, AA) %>% summarise(helix = sum(SS == "H" | SS == "G")/n()*100, turn = sum(SS == "T")/n()*100, coil = sum(SS == "C" | SS == "E")/n()*100)
+  
+#Round results to one decimal place
+SecStr_tbl$helix <- round(SecStr_tbl$helix, 1)
+SecStr_tbl$coil <- round(SecStr_tbl$coil, 1)
+SecStr_tbl$turn <- round(SecStr_tbl$turn, 1)
+
+#Print table
+datatable(SecStr_tbl, 
+          class = 'cell-border stripe',
+          caption = "Table 3: Per Residue Secondary Structure"
+          )
+
+#knitr::kable(SecStr_tbl, "html", caption = "Per Residue Secondary Structure") %>% kable_styling(bootstrap_options = c("striped", "condensed"), full_width = FALSE) %>% scroll_box(height = "400px")
+
+```
+
+#### **Data Explanation:**
+Secondary structures were assigned by YASARA using the md_analyzesecstr macro. As seen, 'H' stands for alpha helix, 'T' for turn, 'C' for coil, 'E' for beta bridge, and 'G' for 3/10 helix. Values for each type of structure (helix, turn, coil) were summarized to show the percentage of each secondary structure each amino acid adopted during the simulation. 
+
+#### **Interpretation:**
+Overall, .... (identify location(s) in which mutant secondary structure varies significantly from the wildtype)
+
+***
+## Comparison with the wild-type model
+
+### Comparison of Dynamic Cross-Correlation Matrices
+
+```{r DCCM, echo=FALSE, warning=FALSE, message=FALSE, fig.align="center", fig.width= 7, fig.height=10}
+#Create names vector
+vecdccm <- RMSF %>% select(ResNum) %>% filter(!is.na(ResNum)) 
+namesvecdccm <- vecdccm[['ResNum']]
+  
+#name the columns in the dccm
+colnames(dccmdata) <- c(namesvec)
+
+#Add the row numbers
+dccmdata <- dccmdata[1:317, 1:317]
+dccmdata$residue <- namesvecdccm
+
+#make data long
+dccmlong <- dccmdata %>% gather(., ResNum, DCC, 1:317) %>% separate(., ResNum, sep = "_", into = c("AAtype", "ResNum", "Mol"))
+
+#convert Resnum to numeric
+dccmlong$ResNum <- as.numeric(dccmlong$ResNum)
+
+#plot the data
+dccmmutplot <- ggplot(dccmlong, aes(x = residue, y = ResNum, fill = DCC)) + 
+  geom_tile() +
+  scale_fill_gradient2(low = "red", mid = "white", high = "blue", name = "Cross Correlation", guide = guide_colorbar(direction = "horizontal")) +
+  labs(x = "Amino Acid Number", y = "Amino Acid Number", caption = paste("Structure: ", mutname)) +
+  theme(axis.text = element_text(size = 14, face = "bold", color = "grey50"), axis.title = element_text(size = 16, face = "bold"), plot.caption = element_text(face = "bold"), legend.position = "bottom") +
+  facet_grid(.~Mol) 
+
+#Load data
+dccmq <- dccmlong
+dccmwt <- read_table2("Clean_Tetherin_dccm.tab", col_names = FALSE, skip = 1)
+RMSfwt <- read_table2("Clean_Tetherin_analysisres.tab", col_names = FALSE, skip = 1)
+colnames(RMSfwt) <- c("AAtype", "ResNum", "Mol", "RMSDca", "RMSDbkbn", "RMSDheavy", "rmsfwt")
+RMSfwtnames <- RMSf %>% unite(ResNum, c(AAtype, ResNum, Mol), sep = "_")
+wtnamesvecdccm <- RMSfwtnames %>% filter(!is.na(rmsf))%>% select(ResNum) 
+wtnamesvecdccm <- wtnamesvecdccm[['ResNum']]
+#name the columns in the dccm
+colnames(dccmwt) <- c(wtnamesvecdccm)
+
+#Add the row numbers
+dccmwt <- dccmwt[1:317, 1:317]
+dccmwt$residue <- wtnamesvecdccm
+dccmwtlong <- dccmwt %>% gather(., Res, DCCwt, 1:317) %>% select(DCCwt, Res, residue) %>% separate(., Res, into = c("AAtype", "ResNum", "Mol"), sep = "_") %>% separate(., residue, into = c("AAtype2", "residue", "Mol2"), sep = "_")
+dccmwtlong$residue <- as.numeric(dccmwtlong$residue)
+dccmwtlong$ResNum <- as.numeric(dccmwtlong$ResNum)
+
+dccmwtplot <- ggplot(dccmwtlong, aes(x = residue, y = ResNum, fill = DCCwt)) + 
+  geom_tile() +
+  scale_fill_gradient2(low = "red", mid = "white", high = "blue", name = "Cross Correlation", guide = guide_colorbar(direction = "horizontal")) +
+  labs(x = "Amino Acid Number", y = "Amino Acid Number", caption = paste("Structure: WT")) +
+  theme(axis.text = element_text(size = 14, face = "bold", color = "grey50"), axis.title = element_text(size = 16, face = "bold"), plot.caption = element_text(face = "bold"), legend.position = "bottom") +
+  facet_grid(.~Mol)
+
+plot_grid(dccmwtplot, dccmmutplot, ncol = 1)
+
+```
+
+#### **Data Explanation:**
+Normalized correlation of amino acid dynamics in the A and B molecules of Tetherin. Blue indicates correlation and red indicates anticorrelation on scale of 1 (correlated) to -1 (anti-correlated). 
+
+#### **Interpretation:**
+((Comparison of the correlation matrices shown indicates deviations from the wild-type around the mutation site at Ala117 and around amino acid 100.))
+
+***
+
+### Comaprison of per Residue Root Mean Square Flucuations
+```{r RMSF plot, echo=FALSE, warning=FALSE, message=FALSE, fig.align="center"}
+#Set column names
+colnames(RMSf) <- c("AAtype", "ResNum", "Mol", "RMSDca", "RMSDbkbn", "RMSDheavy", "rmsf")
+  
+#Make final object and remove NA
+RMSF <<- RMSf %>% filter(!is.na(ResNum))
+  
+#Plot RMSF vs. ResNum
+mutrmsf <- ggplot(RMSF, aes(x = ResNum, y = rmsf, colour = Mol)) +
+  geom_point(alpha = 0.4) +
+  geom_smooth(se = FALSE) +
+  ylim(0, max(RMSF$rmsf) + 0.5) +
+  labs(x = "Amino Acid number", y = expression(paste("RMSF of C", alpha)), caption = paste("Structure: ", mutname)) +
+  theme(axis.text = element_text(size = 14, face = "bold", color = "grey50"), axis.title = element_text(size = 16, face = "bold")) +
+  scale_color_brewer(type = "div", palette = "Set1")
+
+#Load files
+RMSfwt <- read_table2("Clean_Tetherin_analysisres.tab", col_names = FALSE, skip = 1)
+#Set column names
+colnames(RMSfwt) <- c("AAtype", "ResNum", "Mol", "RMSDca", "RMSDbkbn", "RMSDheavy", "rmsfwt")
+
+#Make final object and remove NA and non-RMSF columns
+RMSFwt <- RMSfwt %>% filter(!is.na(ResNum))
+
+wtrmsf <- ggplot(RMSFwt, aes(x = ResNum, y = rmsfwt, colour = Mol)) +
+  geom_point(alpha = 0.4) +
+  geom_smooth(se = FALSE) +
+  ylim(0, max(RMSF$rmsf) + 0.5) +
+  labs(x = "Amino Acid number", y = expression(paste("RMSF of C", alpha)), caption = "Structure: WT") +
+  theme(axis.text = element_text(size = 14, face = "bold", color = "grey50"), axis.title = element_text(size = 16, face = "bold")) +
+  scale_color_brewer(type = "div", palette = "Set1")
+
+plot_grid(wtrmsf, mutrmsf, ncol = 1)
+
+```
+
+#### **Data Explanation:**
+RMSF (Root Mean Square Flucuation) indicates the relative mobility of each amino acid during the 10 ns simulation. Data are colored according to which molecule the amino acid resides within.
+
+#### **Interpretation:**
+
+((Speak about minima (general amino acid ranges) and overall shape. I.e. horizontal/linear/'w' shaped, etc..))
+ 
+
+***
+
+
+
+### Correlation of RMSF
+```{r RMSF comparison, echo=FALSE, warning=FALSE, message=FALSE, fig.align="center"}
+
+#Load files
+RMSfwt <- read_table2("Clean_Tetherin_analysisres.tab", col_names = FALSE, skip = 1)
+RMSfquery <- RMSf
+  
+#Set column names
+colnames(RMSfwt) <- c("AAtype", "ResNum", "Mol", "RMSDca", "RMSDbkbn", "RMSDheavy", "rmsfwt")
+colnames(RMSfquery) <- c("AAtype", "ResNum", "Mol", "RMSDca", "RMSDbkbn", "RMSDheavy", "rmsfq")
+  
+#Make final object and remove NA and non-RMSF columns
+RMSFwt <- RMSfwt %>% filter(!is.na(ResNum)) %>% select(ResNum, rmsfwt)
+RMSFq <- RMSfquery %>% filter(!is.na(ResNum)) %>% select(rmsfq)
+RMSFcomp <- bind_cols(RMSFwt, RMSFq) 
+  
+#Calculate outliers
+RMSFcorr <- RMSFcomp %>% mutate(diff = rmsfwt - rmsfq)
+RMSFmeandiff <- mean(RMSFcorr$diff)
+RMSFmeandiffsd <- sd(RMSFcorr$diff)
+RMSFcorr <- RMSFcorr %>% mutate(outlier = ifelse(abs(diff)-abs(RMSFmeandiff) > 2 * RMSFmeandiffsd, "Y", "NA"))
+RMSFoutliers <- RMSFcorr %>% filter(outlier != "NA")
+  
+#Calculate correlation between data
+RMSFmod <- lm(rmsfq ~ rmsfwt, data = RMSFcomp)
+tidyRMSF <- tidy(RMSFmod)
+  
+#Plot RMSF vs. RMSF with correlation and outliers
+ggplot(RMSFcomp, aes(x = rmsfwt, y = rmsfq)) +
+  geom_point(alpha = 0.4) +
+  geom_abline(intercept = 0, slope = 1, size = 1, linetype = 2) +
+  xlim(0.5, max(RMSFcomp$rmsfwt) + 0.5) +
+  ylim(0.5, max(RMSFcomp$rmsfwt) + 0.5) +
+  labs(x = "RMSF in wildtype", y = "RMSF of Mutant", caption = paste("Structure: ", mutname)) +
+  theme(axis.text = element_text(size = 14, face = "bold", color = "grey50"), axis.title = element_text(size = 16, face = "bold")) +
+  geom_text_repel(data = RMSFoutliers, aes(x = rmsfwt, y = rmsfq, label = ResNum), inherit.aes = FALSE) +
+  geom_point(data = RMSFoutliers, aes(x = rmsfwt, y = rmsfq), color = "red", size = 2) +
+  annotate("text", x = 4, y = 5, label = paste("R = ", round(tidyRMSF[2,2], 2)), color = "black", size = 8)
+
+```
+
+
+```{r outliers location, echo=FALSE, warning=FALSE, message=FALSE, fig.align="center"}
+#Make the basic domain plot in ggplot
+
+ggplot() +
+  xlim(0,200) +
+  ylim(0.059, 0.11) +
+  annotate("segment", x = 1, xend = 180, y = 0.085, yend = 0.085) +
+  #Cytoplasmic region
+  annotate("rect", xmin = 1, ymin = .08, xmax = 19, ymax = 0.09, fill = "magenta") +
+  # TM1
+  annotate("rect", xmin = 22, ymin = 0.08, xmax = 45, ymax = 0.09, fill = "red") +
+  #Ectodomain
+  annotate("rect", xmin = 50, ymin = 0.08, xmax = 165, ymax = 0.09, fill = "green") +
+  #Coiled-Coil
+  annotate("rect", xmin = 100, ymin = 0.08, xmax = 165, ymax = 0.09, fill = "light blue") +
+  #TM2
+  annotate("rect", xmin = 167, min = 0.08, xmax = 180, ymax = 0.09, fill = "pink") +
+  #Add outliers to plot
+  geom_point(data = RMSFoutliers, aes(x = ResNum, y = 0.09), color = "blue", size = 5) +
+  #Label outliers
+  geom_text_repel(data = RMSFoutliers, aes(x = ResNum, y = 0.09, label = ResNum), inherit.aes = FALSE, direction = "both") +
+  #Add annotation of domains
+  annotate("text", x = 10, y = 0.07, label = "Cytoplasmic \nRegion", size = 4) +
+  annotate("text", x = 35, y = 0.075, label = "Transmembrane \nAnchor", size = 4) +
+  annotate("text", x = 100, y = 0.07, label = "Ectodomain", size = 5) +
+  annotate("text", x = 132, y = 0.078, label = "Coiled-coil", size = 5) +
+  annotate("text", x = 180, y = 0.075, label = "Transmembrane \nAnchor", size = 4) +
+  annotate("segment", x = 50, xend = 165, y = 0.072, yend = 0.072) +
+  theme(axis.text = element_blank(), axis.title = element_blank(), axis.line = element_blank(), axis.ticks = element_blank())
+
+```
+
+#### **Data Explanation:**
+RMSF values for both molecules in the wild-type Tetherin (x-axis) and `r mutname` Tetherin (y-axis) were plotted against each other to show correlation. The dashed line indicates perfect correlation between the simulations. Outliers were calculated as differences between wildtype and mutant RMSF values that were > 2 standard deviations above the average deviation between the values. Outliers are further plotted on a schematic showing the location within the Tetherin structure.
+
+#### **Interpretation:**
+((Grouping of the outliers, above (more flex in mut) or below (more flex WT) line))
+
+
+***
+
+###  Comparison of Secondary Structure
+
+```{r Secondary Structure barplot, echo=FALSE, warning=FALSE, message=FALSE, fig.align="center"}
+#Load files
+SSwt <- read_table2("Clean_Tetherin_SecStranalysis.tab", col_names = FALSE, skip = 2)
+SSquery <- SecStr_tbl
+
+#Create names vector
+vec <- RMSfwt %>% select(1:3) %>% filter(!is.na(ResNum)) %>% unite(AA, AAtype, ResNum, Mol, sep = "_")
+namesvec <- vec[['AA']]
+  
+#name the columns in the df
+colnames(SSwt) <- c("Time", namesvec)
+  
+#Make data frame long
+SSwt_tbl <- SSwt %>% gather(., AA, SS, 2:length(.)) %>% separate(., AA, c("AA", "ResNum", "Mol"), sep = "_")
+  
+#make resnum a numeric vector
+SSwt_tbl$ResNum <- as.numeric(SSwt_tbl$ResNum)
+  
+# Remove NA
+SSwt_tbl <- SSwt_tbl %>% filter(!is.na(Time))
+  
+#Create table of Secondary Structure
+SSwt_tbl <- SSwt_tbl %>% group_by(ResNum, Mol, AA) %>% summarise(helixwt = sum(SS == "H" | SS == "G")/n()*100, turnwt = sum(SS == "T")/n()*100, coilwt = sum(SS == "C")/n()*100)
+  
+#Round results to one decimal place
+SSwt_tbl$helixwt <- round(SSwt_tbl$helixwt, 1)
+SSwt_tbl$coilwt <- round(SSwt_tbl$coilwt, 1)
+SSwt_tbl$turnwt <- round(SSwt_tbl$turnwt, 1)
+
+#Make final object and remove NA and non-RMSF columns
+SSwt_tbl <- SSwt_tbl %>% filter(!is.na(ResNum)) 
+SSquery <- SSquery %>% filter(!is.na(ResNum)) %>% select(4:6)
+SScomp <- bind_cols(SSwt_tbl, SSquery) 
+  
+#Calculate outliers
+SScorr <- SScomp %>% mutate(diffhelix = helixwt - helix) %>%
+  mutate(diffturn = turnwt - turn) %>%
+  mutate(diffcoil = coilwt - coil)
+SSdiffhelix <- mean(SScorr$diffhelix)
+SSdiffturn <- mean(SScorr$diffturn)
+SSdiffcoil <- mean(SScorr$diffcoil)
+SSdiffhelixsd <- sd(SScorr$diffhelix)
+SSdiffturnsd <- sd(SScorr$diffturn)
+SSdiffcoilsd <- sd(SScorr$diffcoil)
+SScorr <- SScorr %>% mutate(outlier = ifelse(abs(diffhelix)-abs(SSdiffhelix) > 2 * SSdiffhelixsd | abs(diffturn)-abs(SSdiffturn) > 2 * SSdiffturnsd | abs(diffcoil)-abs(SSdiffcoil) > 2 * SSdiffcoilsd, "Y", "NA"))
+SSoutliers <- SScorr %>% filter(outlier != "NA")
+
+#Make _tbl files long
+SSwt_tbl_long <- SSwt_tbl %>% gather(., SS, percent_SS, 4:6) 
+SSquery_long <- SecStr_tbl %>% gather(., SS, percent_SS, 4:6) 
+
+
+wtp <- ggplot(SSwt_tbl_long, aes(x = ResNum, y = percent_SS, fill = SS)) + 
+  geom_bar(stat = "identity") + 
+  facet_grid(Mol~.) +
+  ylim(0,100) +
+  #scale_y_discrete(breaks=seq(0,100,10), limits = c(0,110)) +
+  labs(x = "Amino Acid Number", y = "% Secondary Structure", caption = "WT")
+
+
+
+mutp <- ggplot(SSquery_long, aes(x = ResNum, y = percent_SS, fill = SS)) + 
+  geom_bar(stat = "identity") + 
+  facet_grid(Mol~.) +
+  ylim(0,100) +
+  #scale_y_discrete(breaks=seq(0,100,10), limits = c(0,110)) +
+  labs(x = "Amino Acid Number", y = "% Secondary Structure", caption = mutname)
+
+plot_grid(wtp, mutp, ncol = 1)
+
+
+```
+
+
+```{r Secondary Structure outliers schematic, echo=FALSE, warning=FALSE, message=FALSE, fig.align="center", fig.height=8}
+#Make final object and remove NA and non-RMSF columns
+SSquery <- SecStr_tbl
+SSwt_tbl <- SSwt_tbl %>% filter(!is.na(ResNum)) 
+SSquery <- SSquery %>% filter(!is.na(ResNum)) %>% select(4:6)
+SScomp <- bind_cols(SSwt_tbl, SSquery) 
+  
+#Calculate outliers
+SScorr <- SScomp %>% mutate(diffhelix = helixwt - helix) %>%
+  mutate(diffturn = turnwt - turn) %>%
+  mutate(diffcoil = coilwt - coil)
+SSdiffhelix <- mean(SScorr$diffhelix)
+SSdiffturn <- mean(SScorr$diffturn)
+SSdiffcoil <- mean(SScorr$diffcoil)
+SSdiffhelixsd <- sd(SScorr$diffhelix)
+SSdiffturnsd <- sd(SScorr$diffturn)
+SSdiffcoilsd <- sd(SScorr$diffcoil)
+SScorr <- SScorr %>% mutate(outlier = ifelse(abs(diffhelix)-abs(SSdiffhelix) > 2 * SSdiffhelixsd | abs(diffturn)-abs(SSdiffturn) > 2 * SSdiffturnsd | abs(diffcoil)-abs(SSdiffcoil) > 2 * SSdiffcoilsd, "Y", "NA"))
+SSoutliers <- SScorr %>% filter(outlier != "NA")
+
+#Make the plot
+ggplot() +
+  xlim(0,200) +
+  ylim(0.059, 0.11) +
+  annotate("segment", x = 1, xend = 180, y = 0.085, yend = 0.085) +
+  #Cytoplasmic region
+  annotate("rect", xmin = 1, ymin = .08, xmax = 19, ymax = 0.09, fill = "magenta") +
+  # TM1
+  annotate("rect", xmin = 22, ymin = 0.08, xmax = 45, ymax = 0.09, fill = "red") +
+  #Ectodomain
+  annotate("rect", xmin = 50, ymin = 0.08, xmax = 165, ymax = 0.09, fill = "green") +
+  #Coiled-Coil
+  annotate("rect", xmin = 100, ymin = 0.08, xmax = 165, ymax = 0.09, fill = "light blue") +
+  #TM2
+  annotate("rect", xmin = 167, min = 0.08, xmax = 180, ymax = 0.09, fill = "pink") +
+  #Add outliers to plot
+  geom_point(data = SSoutliers, aes(x = ResNum, y = 0.09), color = "blue", size = 5) +
+  #Label outliers
+  geom_text_repel(data = SSoutliers, aes(x = ResNum, y = 0.09, label = ResNum), inherit.aes = FALSE, direction = "both") +
+  #Add annotation of domains
+  annotate("text", x = 10, y = 0.07, label = "Cytoplasmic \nRegion", size = 4) +
+  annotate("text", x = 35, y = 0.075, label = "Transmembrane \nAnchor", size = 4) +
+  annotate("text", x = 100, y = 0.07, label = "Ectodomain", size = 5) +
+  annotate("text", x = 132, y = 0.078, label = "Coiled-coil", size = 5) +
+  annotate("text", x = 180, y = 0.075, label = "Transmembrane \nAnchor", size = 4) +
+  annotate("segment", x = 50, xend = 165, y = 0.072, yend = 0.072) +
+  theme(axis.text = element_blank(), axis.title = element_blank(), axis.line = element_blank(), axis.ticks = element_blank())
+```
+
+
+#### **Data Explanation:**
+Comparison of secondary structure over time between `r mutname` and wildtype Tetherin. Outliers were calculated as differences between wildtype and mutant percentage in each secondary structure that were > 2 standard deviations above the average deviation between the values. Outliers are further plotted on a schematic showing the location within the Tetherin structure.
+
+#### **Interpretation:**
+Overall,... (identify location(s) in which mutant secondary structure varies significantly from the wildtype).Identify the general location(s) of the outlier groupings as seen in the below schematic. (WT RMSF / Mut RMSF = % WT more flexible)(Mut RMSF/ WT RMSF = % Mut % less flexible than wt)
+
+***
